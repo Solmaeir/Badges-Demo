@@ -1,0 +1,163 @@
+@*
+    Modül Yönetimi ekranının paylaşılan istemci mantığı. Hem tam sayfa
+    (Modules.cshtml) hem Rozet Ekle/Düzenle formundaki popup (_Form.cshtml)
+    bu partial'ı dahil edip window.ModulYonetimiKur(...)'u kendi tablo/form
+    id'leriyle çağırır — satırlar TEK yerde (burada) JS ile kuruluyor, iki
+    ayrı yerde elle HTML yazılmıyor. Sayfayı çağıran taraf, kendi sayfasında
+    şu id'lerin var olduğundan emin olmalı: secenekler.mevcutTbodyId,
+    secenekler.kesfedilenTbodyId, secenekler.kesfedilenAciklamaId,
+    secenekler.elleEkleFormId (içinde name="controllerName"/"moduleName"
+    girdileri olan bir form) ve sayfada bir @@Html.AntiForgeryToken() girdisi.
+*@
+<script>
+    window.ModulYonetimiKur = function (secenekler) {
+        function tokenAl() {
+            var girdi = document.querySelector('input[name="__RequestVerificationToken"]');
+            return girdi ? girdi.value : '';
+        }
+
+        function formVerisi(alanlar) {
+            var veri = new FormData();
+            veri.append('__RequestVerificationToken', tokenAl());
+            Object.keys(alanlar).forEach(function (ad) { veri.append(ad, alanlar[ad]); });
+            return veri;
+        }
+
+        function gonderVeYenile(adres, alanlar) {
+            fetch(adres, { method: 'POST', body: formVerisi(alanlar) })
+                .then(function (r) { return r.json(); })
+                .then(function (sonuc) {
+                    if (!sonuc.success) { alert(sonuc.message); }
+                    yukle();
+                });
+        }
+
+        function silFormuOlustur(id, onayMesaji) {
+            var form = document.createElement('form');
+            form.className = 'd-inline';
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                if (!confirm(onayMesaji)) return;
+                gonderVeYenile(secenekler.deleteModuleUrl, { id: id });
+            });
+
+            var buton = document.createElement('button');
+            buton.type = 'submit';
+            buton.className = 'btn btn-danger btn-sm';
+            buton.textContent = 'Sil';
+            form.appendChild(buton);
+            return form;
+        }
+
+        function mevcutSatirOlustur(modul) {
+            var satir = document.createElement('tr');
+
+            var adHucresi = document.createElement('td');
+            adHucresi.textContent = modul.moduleName;
+            satir.appendChild(adHucresi);
+
+            var controllerHucresi = document.createElement('td');
+            var kod = document.createElement('code');
+            kod.textContent = modul.controllerName;
+            controllerHucresi.appendChild(kod);
+            satir.appendChild(controllerHucresi);
+
+            var islemHucresi = document.createElement('td');
+            islemHucresi.className = 'text-right';
+            islemHucresi.appendChild(silFormuOlustur(modul.moduleId, 'Bu modülü silmek istediğinize emin misiniz?'));
+            satir.appendChild(islemHucresi);
+
+            return satir;
+        }
+
+        function kesfedilenSatirOlustur(controllerAdi) {
+            var satir = document.createElement('tr');
+
+            var adHucresi = document.createElement('td');
+            adHucresi.className = 'align-middle';
+            var kod = document.createElement('code');
+            kod.textContent = controllerAdi;
+            adHucresi.appendChild(kod);
+            satir.appendChild(adHucresi);
+
+            var formHucresi = document.createElement('td');
+            var form = document.createElement('form');
+            form.className = 'form-inline';
+
+            var adGirdisi = document.createElement('input');
+            adGirdisi.type = 'text';
+            adGirdisi.className = 'form-control form-control-sm mr-2';
+            adGirdisi.placeholder = 'Görünecek ad (örn. Faturalar)';
+            adGirdisi.required = true;
+            adGirdisi.style.width = '220px';
+            form.appendChild(adGirdisi);
+
+            var buton = document.createElement('button');
+            buton.type = 'submit';
+            buton.className = 'btn btn-success btn-sm';
+            buton.textContent = 'Modül Olarak Ekle';
+            form.appendChild(buton);
+
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                gonderVeYenile(secenekler.addModuleUrl, { controllerName: controllerAdi, moduleName: adGirdisi.value });
+            });
+
+            formHucresi.appendChild(form);
+            satir.appendChild(formHucresi);
+
+            return satir;
+        }
+
+        function elleEkleFormunuKur() {
+            var form = document.getElementById(secenekler.elleEkleFormId);
+            // dataset.kuruldu: bu form birden fazla kez ModulYonetimiKur
+            // çağrılsa da (popup her açılışta çağırıyor) dinleyici yalnızca
+            // bir kez bağlansın diye.
+            if (!form || form.dataset.kuruldu) return;
+            form.dataset.kuruldu = '1';
+
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                var controllerGirdisi = form.querySelector('[name="controllerName"]');
+                var adGirdisi = form.querySelector('[name="moduleName"]');
+                gonderVeYenile(secenekler.addModuleUrl, {
+                    controllerName: controllerGirdisi.value,
+                    moduleName: adGirdisi.value
+                });
+                form.reset();
+            });
+        }
+
+        function yukle() {
+            fetch(secenekler.getJsonUrl)
+                .then(function (r) { return r.json(); })
+                .then(function (veri) {
+                    var mevcutTbody = document.getElementById(secenekler.mevcutTbodyId);
+                    mevcutTbody.innerHTML = '';
+                    veri.mevcutModuller.forEach(function (modul) {
+                        mevcutTbody.appendChild(mevcutSatirOlustur(modul));
+                    });
+                    var mevcutBosMesaj = document.getElementById(secenekler.mevcutBosMesajId);
+                    if (mevcutBosMesaj) mevcutBosMesaj.style.display = veri.mevcutModuller.length === 0 ? '' : 'none';
+
+                    var kesfedilenTbody = document.getElementById(secenekler.kesfedilenTbodyId);
+                    kesfedilenTbody.innerHTML = '';
+                    veri.kesfedilenEksikler.forEach(function (controllerAdi) {
+                        kesfedilenTbody.appendChild(kesfedilenSatirOlustur(controllerAdi));
+                    });
+
+                    var bosVarMi = veri.kesfedilenEksikler.length === 0;
+                    var bosMesaj = document.getElementById(secenekler.kesfedilenBosMesajId);
+                    var icerik = document.getElementById(secenekler.kesfedilenIcerikId);
+                    if (bosMesaj) bosMesaj.style.display = bosVarMi ? '' : 'none';
+                    if (icerik) icerik.style.display = bosVarMi ? 'none' : '';
+
+                    if (secenekler.sonrasi) secenekler.sonrasi();
+                });
+        }
+
+        elleEkleFormunuKur();
+        yukle();
+    };
+</script>

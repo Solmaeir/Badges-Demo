@@ -1,0 +1,203 @@
+@model ProfilRozetleriModulu.ViewModels.BadgeAdminViewModel
+@*
+    Ekleme/düzenleme formunun ortak gövdesi. BadgeType seçimine göre hangi
+    alanların göründüğü JS ile yönetiliyor (bkz. altındaki script);
+    doğrulamanın kendisi BadgeAdminService'te.
+
+    "Modülleri Yönet" linki forma dokunmadan modül ekleyip silinebilsin diye
+    popup olarak açılır. Modal'ın kendisi (#rozetModulModal) BU DOSYADA DEĞİL
+    — Add.cshtml/Edit.cshtml, bu partial'ı render eden <form> etiketinin
+    DIŞINDA ayrıca _ModulYonetimiModal.cshtml'i de çağırır (bkz. o dosyadaki
+    not: modal kendi <form>'unu taşıdığı için Rozet formunun içine
+    yerleştirilemez). Modül eklenip silindiğinde aşağıdaki Modül dropdown'ı
+    da sayfa yenilenmeden tazelenir.
+*@
+
+<div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+
+<input type="hidden" asp-for="BadgeId" />
+<input type="hidden" asp-for="IconPath" id="secilenIkonInput" />
+
+<div class="form-group">
+    <label asp-for="BadgeName"></label>
+    <input asp-for="BadgeName" class="form-control" />
+    <span asp-validation-for="BadgeName" class="text-danger"></span>
+</div>
+
+<div class="form-group">
+    <label asp-for="BadgeDescription"></label>
+    <textarea asp-for="BadgeDescription" class="form-control" rows="2"></textarea>
+    <span asp-validation-for="BadgeDescription" class="text-danger"></span>
+    <small class="form-text text-muted">Kullanıcıya rozetin üzerine gelince gösterilen açıklama.</small>
+</div>
+
+<div class="form-group">
+    <label asp-for="BadgeType"></label>
+    <select asp-for="BadgeType" class="form-control" id="badgeTypeSecimi">
+        <option value="0">Sistem — kaç gün üst üste giriş yapıldığına bakar</option>
+        <option value="1">Modül — bir modüle kaç gün üst üste girildiğine bakar</option>
+        <option value="2">Keşif — bir modül bir kez (15+ sn) kullanılınca hemen kazanılır</option>
+        <option value="3">Dış Sinyal — WebLog dışı bir koşula bağlıdır (örn. Wizard turu)</option>
+    </select>
+    <span asp-validation-for="BadgeType" class="text-danger"></span>
+</div>
+
+<div class="form-group" id="moduleAlani">
+    <label asp-for="ModuleId">Modül</label>
+    <select asp-for="ModuleId" class="form-control">
+        <option value="">-- Modül seçin --</option>
+        @foreach (var modul in Model.ModuleSecenekleri)
+        {
+            <option value="@modul.ModuleId" selected="@(modul.ModuleId == Model.ModuleId)">@modul.ModuleName (@modul.ControllerName)</option>
+        }
+    </select>
+    <span asp-validation-for="ModuleId" class="text-danger"></span>
+    <small class="form-text text-muted">Listede yoksa <a href="#" id="linkModulleriYonet">Modülleri Yönet</a> ekranından ekleyebilirsin.</small>
+</div>
+
+<div class="form-group" id="sinyalAlani">
+    <label asp-for="ExternalSignalKey">Dış Sinyal</label>
+    <select asp-for="ExternalSignalKey" class="form-control">
+        <option value="">-- Sinyal seçin --</option>
+        @foreach (var sinyal in Model.SinyalSecenekleri)
+        {
+            <option value="@sinyal.Key" selected="@(sinyal.Key == Model.ExternalSignalKey)">@sinyal.Label</option>
+        }
+    </select>
+    <span asp-validation-for="ExternalSignalKey" class="text-danger"></span>
+    @if (Model.SinyalSecenekleri.Count == 0)
+    {
+        <small class="form-text text-danger">Host şu an hiç dış sinyal desteklemiyor (IExternalAchievementProvider.GetSupportedSignals() boş).</small>
+    }
+</div>
+
+<div class="form-group" id="gerekenSayiAlani">
+    <label asp-for="RequiredValue"></label>
+    <input asp-for="RequiredValue" type="number" min="1" max="3650" class="form-control" />
+    <span asp-validation-for="RequiredValue" class="text-danger"></span>
+    <small class="form-text text-muted" id="gerekenSayiAciklama">Kaç gün üst üste gerektiği.</small>
+</div>
+
+<div class="form-group">
+    <label>Rozet İkonu</label>
+    <div id="ikonSecici" class="d-flex flex-wrap" style="gap:8px; max-height:260px; overflow-y:auto; border:1px solid #dee2e6; border-radius:8px; padding:10px;">
+        @foreach (var ikon in Model.IkonSecenekleri)
+        {
+            <img src="@ikon" data-ikon-yolu="@ikon"
+                 class="ikon-secim-ogesi @(ikon == Model.IconPath ? "secili" : "")"
+                 style="width:56px;height:56px;object-fit:contain;cursor:pointer;border-radius:8px;padding:4px;" />
+        }
+    </div>
+    <small class="form-text text-muted">Seçili: <span id="seciliIkonAdi">@(string.IsNullOrEmpty(Model.IconPath) ? "(seçilmedi)" : Model.IconPath)</span></small>
+</div>
+
+<style>
+    .ikon-secim-ogesi.secili {
+        outline: 3px solid #007bff;
+        background-color: #eaf1ff;
+    }
+</style>
+
+<script>
+    (function () {
+        var tipSelect = document.getElementById('badgeTypeSecimi');
+        var moduleAlani = document.getElementById('moduleAlani');
+        var sinyalAlani = document.getElementById('sinyalAlani');
+        var gerekenSayiAlani = document.getElementById('gerekenSayiAlani');
+        var gerekenSayiAciklama = document.getElementById('gerekenSayiAciklama');
+        var gerekenSayiInput = gerekenSayiAlani.querySelector('input');
+
+        // BadgeType: 0=System, 1=Module, 2=Discovery, 3=ExternalSignal
+        function alanlariGuncelle() {
+            var tur = tipSelect.value;
+
+            moduleAlani.style.display = (tur === '1' || tur === '2') ? '' : 'none';
+            sinyalAlani.style.display = (tur === '3') ? '' : 'none';
+
+            // Discovery ve ExternalSignal streak degil, tek kosul - sayi
+            // anlamsiz oldugu icin gizlenip 1'e sabitleniyor (BadgeAdminService
+            // zaten sunucu tarafinda da 1'e zorluyor, burasi sadece gorsel).
+            if (tur === '2' || tur === '3') {
+                gerekenSayiAlani.style.display = 'none';
+                gerekenSayiInput.value = 1;
+            } else {
+                gerekenSayiAlani.style.display = '';
+                gerekenSayiAciklama.textContent = tur === '0'
+                    ? 'Kaç gün üst üste giriş yapılması gerektiği.'
+                    : 'Modüle kaç gün üst üste girilmesi gerektiği.';
+            }
+        }
+
+        tipSelect.addEventListener('change', alanlariGuncelle);
+        alanlariGuncelle();
+
+        var seciliIkonAdi = document.getElementById('seciliIkonAdi');
+        var secilenIkonInput = document.getElementById('secilenIkonInput');
+
+        document.querySelectorAll('.ikon-secim-ogesi').forEach(function (img) {
+            img.addEventListener('click', function () {
+                document.querySelectorAll('.ikon-secim-ogesi').forEach(function (i) { i.classList.remove('secili'); });
+                img.classList.add('secili');
+                var yol = img.getAttribute('data-ikon-yolu');
+                secilenIkonInput.value = yol;
+                seciliIkonAdi.textContent = yol;
+            });
+        });
+
+        // --- Modülleri Yönet popup'ı --------------------------------------------------
+        // Tablolar _ModulYonetimiScript.cshtml'deki paylaşılan ModulYonetimiKur
+        // ile kuruluyor (Modules.cshtml'in tam sayfa hali de aynı fonksiyonu
+        // kullanıyor) — burada yalnızca popup'a özel id'ler ve popup açıldığında
+        // veriyi tazeleme var. Modül eklenip silindiğinde "sonrasi" callback'i
+        // Rozet formundaki Modül dropdown'ını da tazeler.
+        document.getElementById('linkModulleriYonet').addEventListener('click', function (e) {
+            e.preventDefault();
+
+            // Her açılışta yeniden çağrılıyor (veri tazelensin diye) - Elle
+            // Ekle formuna dinleyici yalnızca ilk seferde bağlanır
+            // (ModulYonetimiKur'daki dataset.kuruldu koruması).
+            window.ModulYonetimiKur({
+                getJsonUrl: '@Url.Action("GetModulesJson")',
+                addModuleUrl: '@Url.Action("AddModule")',
+                deleteModuleUrl: '@Url.Action("DeleteModule")',
+                mevcutTbodyId: 'rozetModulMevcutTablosu',
+                mevcutBosMesajId: 'rozetModulMevcutBosMesaji',
+                kesfedilenTbodyId: 'rozetModulKesfedilenTablosu',
+                kesfedilenIcerikId: 'rozetModulKesfedilenIcerik',
+                kesfedilenBosMesajId: 'rozetModulKesfedilenBosMesaji',
+                elleEkleFormId: 'rozetModulElleEkleFormu',
+                sonrasi: moduleDropdownYenile
+            });
+
+            $('#rozetModulModal').modal('show');
+        });
+
+        // Popup'ta yeni eklenen/silinen modül, formdaki Modül dropdown'ında
+        // sayfa yenilenmeden görünsün diye.
+        function moduleDropdownYenile() {
+            var select = document.getElementById('ModuleId');
+            if (!select) return;
+
+            fetch('@Url.Action("ModuleOptions")')
+                .then(function (r) { return r.json(); })
+                .then(function (secenekler) {
+                    var mevcutDeger = select.value;
+                    select.innerHTML = '';
+
+                    var bosSecenek = document.createElement('option');
+                    bosSecenek.value = '';
+                    bosSecenek.textContent = '-- Modül seçin --';
+                    select.appendChild(bosSecenek);
+
+                    secenekler.forEach(function (s) {
+                        var opt = document.createElement('option');
+                        opt.value = s.id;
+                        opt.textContent = s.text;
+                        select.appendChild(opt);
+                    });
+
+                    select.value = mevcutDeger;
+                });
+        }
+    })();
+</script>

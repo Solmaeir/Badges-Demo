@@ -1,0 +1,9 @@
+@*
+    Aynı sebeple (Areas kolu host'un Views/_ViewStart.cshtml'ini miras almaz)
+    burada tekrar tanımlanıyor. Host'un paylaşılan layout'unu kullanır — yeni
+    bir host'a taşınırken bu satırın o projenin layout yoluna güncellenmesi
+    gerekir.
+*@
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}

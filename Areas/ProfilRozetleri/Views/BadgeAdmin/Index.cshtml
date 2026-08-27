@@ -1,0 +1,177 @@
+@*
+    Rozet Yönetimi. Tablo sunucuda üretilmez — sayfa açılınca JS,
+    GetBadgesJson'dan JSON çeker ve satırları oradan kurar (yalnızca işlem
+    butonları JS içinde ayrıca oluşturuluyor, o da kuralın istisnası).
+*@
+@{
+    ViewData["Title"] = "Rozet Yönetimi";
+}
+
+@Html.AntiForgeryToken()
+
+@if (TempData["RozetMesaj"] != null)
+{
+    <div class="alert alert-info">@TempData["RozetMesaj"]</div>
+}
+
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Rozetler</h3>
+        <div class="card-tools">
+            <a asp-action="Modules" class="btn btn-default btn-sm">Modülleri Yönet</a>
+            <a asp-action="Add" class="btn btn-success btn-sm">Yeni Rozet Ekle</a>
+        </div>
+    </div>
+
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped">
+                <thead>
+                    <tr>
+                        <th>İkon</th>
+                        <th>Ad</th>
+                        <th>Tür</th>
+                        <th>Gereken Sayı</th>
+                        <th>Modül / Sinyal</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="rozetTablosu"></tbody>
+            </table>
+        </div>
+
+        <p class="text-muted mb-0" id="rozetBosMesaji" style="display:none;">Henüz rozet eklenmemiş.</p>
+    </div>
+</div>
+
+@section Scripts
+{
+<script>
+    (function () {
+        var editUrlTaban = '@Url.Action("Edit")';
+        var deleteUrl = '@Url.Action("Delete")';
+
+        function tokenAl() {
+            var girdi = document.querySelector('input[name="__RequestVerificationToken"]');
+            return girdi ? girdi.value : '';
+        }
+
+        function ikonHucresiOlustur(rozet) {
+            var hucre = document.createElement('td');
+            hucre.style.width = '56px';
+
+            if (rozet.iconPath) {
+                var img = document.createElement('img');
+                img.src = rozet.iconPath;
+                img.alt = '';
+                img.style.cssText = 'width:40px;height:40px;object-fit:contain;';
+                img.onerror = function () { img.style.display = 'none'; };
+                hucre.appendChild(img);
+            }
+
+            return hucre;
+        }
+
+        function modulSinyalHucresiOlustur(rozet) {
+            var hucre = document.createElement('td');
+
+            if (!rozet.modulSinyalMetni) {
+                var bosIsaret = document.createElement('span');
+                bosIsaret.className = 'text-muted';
+                bosIsaret.textContent = '—';
+                hucre.appendChild(bosIsaret);
+                return hucre;
+            }
+
+            if (rozet.modulSinyalKodMu) {
+                var kod = document.createElement('code');
+                kod.textContent = rozet.modulSinyalMetni;
+                hucre.appendChild(kod);
+            } else {
+                hucre.appendChild(document.createTextNode(rozet.modulSinyalMetni));
+            }
+
+            return hucre;
+        }
+
+        function islemHucresiOlustur(rozet) {
+            var hucre = document.createElement('td');
+            hucre.className = 'text-right';
+
+            var duzenleLink = document.createElement('a');
+            duzenleLink.href = editUrlTaban + '/' + rozet.badgeId;
+            duzenleLink.className = 'btn btn-primary btn-sm mr-1';
+            duzenleLink.textContent = 'Düzenle';
+            hucre.appendChild(duzenleLink);
+
+            var silForm = document.createElement('form');
+            silForm.method = 'post';
+            silForm.action = deleteUrl;
+            silForm.className = 'd-inline';
+            silForm.addEventListener('submit', function (e) {
+                if (!confirm('Bu rozeti silmek istediğinize emin misiniz? Kazanmış kullanıcıların kaydı da etkilenir.')) {
+                    e.preventDefault();
+                }
+            });
+
+            var idGirdi = document.createElement('input');
+            idGirdi.type = 'hidden';
+            idGirdi.name = 'id';
+            idGirdi.value = rozet.badgeId;
+            silForm.appendChild(idGirdi);
+
+            var jetonGirdi = document.createElement('input');
+            jetonGirdi.type = 'hidden';
+            jetonGirdi.name = '__RequestVerificationToken';
+            jetonGirdi.value = tokenAl();
+            silForm.appendChild(jetonGirdi);
+
+            var silButon = document.createElement('button');
+            silButon.type = 'submit';
+            silButon.className = 'btn btn-danger btn-sm';
+            silButon.textContent = 'Sil';
+            silForm.appendChild(silButon);
+
+            hucre.appendChild(silForm);
+            return hucre;
+        }
+
+        function satirOlustur(rozet) {
+            var satir = document.createElement('tr');
+
+            satir.appendChild(ikonHucresiOlustur(rozet));
+
+            var adHucresi = document.createElement('td');
+            adHucresi.textContent = rozet.badgeName;
+            satir.appendChild(adHucresi);
+
+            var turHucresi = document.createElement('td');
+            turHucresi.textContent = rozet.badgeTypeLabel;
+            satir.appendChild(turHucresi);
+
+            var sayiHucresi = document.createElement('td');
+            sayiHucresi.textContent = rozet.requiredValue;
+            satir.appendChild(sayiHucresi);
+
+            satir.appendChild(modulSinyalHucresiOlustur(rozet));
+            satir.appendChild(islemHucresiOlustur(rozet));
+
+            return satir;
+        }
+
+        fetch('@Url.Action("GetBadgesJson")')
+            .then(function (r) { return r.json(); })
+            .then(function (rozetler) {
+                if (rozetler.length === 0) {
+                    document.getElementById('rozetBosMesaji').style.display = '';
+                    return;
+                }
+
+                var tbody = document.getElementById('rozetTablosu');
+                rozetler.forEach(function (rozet) {
+                    tbody.appendChild(satirOlustur(rozet));
+                });
+            });
+    })();
+</script>
+}

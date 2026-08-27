@@ -1,0 +1,20 @@
+@model ProfilRozetleriModulu.ViewModels.BadgeAdminViewModel
+@* Rozet düzenleme. Form gövdesi _Form.cshtml'de, Add ile ortak. *@
+
+<div class="card card-primary">
+    <div class="card-header">
+        <h3 class="card-title">Rozeti Düzenle</h3>
+    </div>
+    <form asp-action="Edit" method="post">
+        <div class="card-body">
+            @await Html.PartialAsync("_Form", Model)
+        </div>
+        <div class="card-footer">
+            <button type="submit" class="btn btn-primary">Kaydet</button>
+            <a asp-action="Index" class="btn btn-default">Vazgeç</a>
+        </div>
+    </form>
+</div>
+
+@* Modülleri Yönet popup'ı - formun DIŞINDA olmalı, bkz. _ModulYonetimiModal.cshtml'deki not. *@
+@await Html.PartialAsync("_ModulYonetimiModal")

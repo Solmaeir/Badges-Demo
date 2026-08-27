@@ -1,0 +1,24 @@
+@*
+    Rozet modülünün üst menüye eklenecek TEK parçası. Host'un tek yapması
+    gereken, kendi navbar'ında uygun bir yere şunu çağırmak:
+
+        @@await Html.PartialAsync("~/Areas/ProfilRozetleri/Views/Shared/_ProfilRozetleriMenuSekmesi.cshtml")
+
+    Bu kadar - başka hiçbir satır, JS ya da CSS eklemeye gerek yok. Link
+    sadece Rozetlerim sayfasına yönlendirir; seviye/XP/rozet/son kazanılan
+    bilgisi zaten o sayfada gösteriliyor. Bu partial canlı veri çekmez, hiçbir
+    ağ isteği başlatmaz.
+
+    ViewBag.CurrentUser kontrolü: host'un HER sayfada dolan ortak kanalı
+    (MyBadges.cshtml de aynı şekilde okuyor, modülün kendi seam'i değil) -
+    giriş yapılmamışsa bu partial hiçbir şey render etmez, host'un ayrıca
+    bir if bloğuna sarmasına gerek kalmaz.
+*@
+@if (ViewBag.CurrentUser != null)
+{
+    <li class="nav-item">
+        <a asp-area="ProfilRozetleri" asp-controller="Badges" asp-action="MyBadges" class="nav-link">
+            <i class="fas fa-medal mr-1"></i>Rozetlerim
+        </a>
+    </li>
+}

@@ -1,0 +1,259 @@
+@*
+    Rozetlerim sayfası: solda profil özet kartı (avatar, seviye/XP, giriş
+    serisi), sağda rozet galerisi. Sol karttaki .profil-* sınıfları
+    (site.css) bu modülün kendi tanımladığı sınıflar. Rozet kartları burada
+    elle yazılmaz — sayfa açılınca JS, /ProfilRozetleri/Badges/GetData'dan
+    JSON çeker ve kartları o veriden dinamik olarak oluşturur (bkz. altındaki
+    script, rozetKartiOlustur).
+
+    Kullanıcı adı/soyadı ViewBag.CurrentUser üzerinden okunuyor — host'un
+    HER sayfada (Area'lı olanlar dahil) bunu dolduran ortak bir filtresi var,
+    bu modüle özel bir mekanizma değil.
+
+    Rozet hover popup'ı (.rozet-popup, site.css) burada tanımlı sınıflar
+    kullanılarak gösteriliyor; sayfa başka bir turlama/rehber sistemine
+    dokunmuyor.
+*@
+@{
+    ViewData["Title"] = ViewBag.Special.SayfaBasligi;
+
+    var ad = ViewBag.CurrentUser.FirstName as string ?? "";
+    var soyad = ViewBag.CurrentUser.LastName as string ?? "";
+    var baslangicHarfleri = ((ad.Length > 0 ? ad[0].ToString() : "") + (soyad.Length > 0 ? soyad[0].ToString() : "")).ToUpper();
+}
+
+<p class="text-muted mb-3">Seviyeni yükselt, rozetleri topla.</p>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card card-yumusak" data-wizard-id="profile-level-card">
+            <div class="card-body text-center px-4 py-4">
+                <div class="profil-avatar-daire mx-auto mb-3">@baslangicHarfleri</div>
+                <h4 class="mb-0 font-weight-bold">@ad @soyad</h4>
+                <p class="text-muted mb-3">@@@ViewBag.CurrentUser.Username</p>
+
+                <div class="mb-3">
+                    <span class="profil-pil profil-pil-seviye mr-1" id="seviyeEtiketi">Seviye -</span>
+                    <span class="profil-pil profil-pil-xp" id="xpEtiketi">- XP</span>
+                </div>
+
+                <div class="profil-ilerleme-track mb-1">
+                    <div class="profil-ilerleme-dolu" id="xpIlerlemeCubugu" style="width: 0%"></div>
+                </div>
+                <div class="d-flex justify-content-between small text-muted mb-3">
+                    <span id="xpIlerlemeMetni">Bir sonraki seviyeye ilerleme</span>
+                    <span id="xpHamDeger">- / -</span>
+                </div>
+
+                <div class="profil-istatistik-kutu mb-2">
+                    <span class="profil-istatistik-etiket">Giriş Serisi</span>
+                    <span class="profil-istatistik-deger" id="girisSerisiDegeri">-</span>
+                </div>
+                <div class="profil-istatistik-kutu">
+                    <span class="profil-istatistik-etiket">Kazanılan Rozet</span>
+                    <span class="profil-istatistik-deger" id="rozetSayisiDegeri">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card card-yumusak" data-wizard-id="profile-badges-gallery">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title mb-0">Rozetlerim</h3>
+                <span class="profil-pil profil-pil-seviye" id="rozetTamamlanmaEtiketi">-/- tamamlandı</span>
+            </div>
+            <div class="card-body">
+                <h6 class="text-muted">KAZANILAN ROZETLER</h6>
+                <div id="kazanilmisRozetler" class="d-flex flex-wrap mb-3"></div>
+
+                <hr />
+
+                <h6 class="text-muted">KAZANILMAMIŞ ROZETLER</h6>
+                <div id="kazanilmamisRozetler" class="d-flex flex-wrap"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts
+{
+    <style>
+        .rozet-karti {
+            width: 128px;
+            margin: 8px;
+            text-align: center;
+            padding: 6px;
+        }
+
+        .rozet-ikon-daire {
+            width: 76px;
+            height: 76px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #fff;
+            margin: 0 auto 6px;
+        }
+
+        .rozet-karti.kilitli .rozet-ikon-daire {
+            background-color: #e9ecef !important;
+            color: #adb5bd !important;
+        }
+
+        .rozet-ikon-gorsel {
+            width: 96px;
+            height: 96px;
+            object-fit: contain;
+            margin: 0 auto 6px;
+            display: block;
+        }
+
+        .rozet-karti.kilitli .rozet-ikon-gorsel {
+            filter: grayscale(100%);
+            opacity: .45;
+        }
+
+        .rozet-adi {
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .rozet-durum {
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: .03em;
+        }
+
+        .rozet-karti.kazanildi .rozet-durum {
+            color: #b8860b;
+        }
+
+        .rozet-karti.kilitli .rozet-durum {
+            color: #adb5bd;
+        }
+    </style>
+
+    <script>
+        (function () {
+            // Kazanılan rozetlerde kırmızı/mavi/sarı dönüşümlü (Bootstrap'ın
+            // zaten kullandığımız yardımcı sınıfları — yeni renk icat edilmedi).
+            var renkSirasi = ['bg-danger', 'bg-primary', 'bg-warning'];
+            var renkSayaci = 0;
+
+            function harfDairesiOlustur(rozet, kazanildiMi) {
+                var daire = document.createElement('div');
+                daire.className = 'rozet-ikon-daire';
+                if (kazanildiMi) {
+                    var renk = renkSirasi[renkSayaci % renkSirasi.length];
+                    renkSayaci++;
+                    daire.classList.add(renk);
+                    if (renk === 'bg-warning') daire.style.color = '#212529';
+                }
+                daire.textContent = (rozet.badgeName || '?').charAt(0).toUpperCase();
+                return daire;
+            }
+
+            function rozetIkonuOlustur(rozet, kazanildiMi) {
+                if (!rozet.iconPath) {
+                    return harfDairesiOlustur(rozet, kazanildiMi);
+                }
+
+                var img = document.createElement('img');
+                img.className = 'rozet-ikon-gorsel';
+                img.src = rozet.iconPath;
+                img.alt = rozet.badgeName;
+                // Asset bulunamazsa (ör. henüz eklenmemiş bir rozet) harf
+                // dairesine düşülür, sayfa kırık görsel göstermez.
+                img.onerror = function () {
+                    img.replaceWith(harfDairesiOlustur(rozet, kazanildiMi));
+                };
+                return img;
+            }
+
+            function rozetKartiOlustur(rozet, kazanildiMi) {
+                var kart = document.createElement('div');
+                // rozet-popup-tetik: hover'da .rozet-popup'ı gösteren sınıf
+                // (site.css) — Wizard'ın popover temasıyla aynı görünüm,
+                // bu tasarıma dokunulmadı.
+                kart.className = 'rozet-karti rozet-popup-tetik ' + (kazanildiMi ? 'kazanildi' : 'kilitli');
+
+                kart.appendChild(rozetIkonuOlustur(rozet, kazanildiMi));
+
+                if (kazanildiMi && rozet.isNew) {
+                    var yeniEtiketi = document.createElement('span');
+                    yeniEtiketi.className = 'rozet-yeni-etiketi';
+                    yeniEtiketi.textContent = 'YENİ';
+                    kart.appendChild(yeniEtiketi);
+                }
+
+                var ad = document.createElement('div');
+                ad.className = 'rozet-adi';
+                ad.textContent = rozet.badgeName;
+                kart.appendChild(ad);
+
+                var durum = document.createElement('div');
+                durum.className = 'rozet-durum';
+                durum.textContent = kazanildiMi ? 'KAZANILDI' : 'KİLİTLİ';
+                kart.appendChild(durum);
+
+                kart.appendChild(rozetPopupOlustur(rozet));
+
+                return kart;
+            }
+
+            function rozetPopupOlustur(rozet) {
+                var popup = document.createElement('div');
+                popup.className = 'rozet-popup';
+
+                var baslik = document.createElement('strong');
+                baslik.textContent = rozet.badgeName;
+                popup.appendChild(baslik);
+
+                if (rozet.badgeDescription) {
+                    var aciklama = document.createElement('div');
+                    aciklama.textContent = rozet.badgeDescription;
+                    popup.appendChild(aciklama);
+                }
+
+                var altBilgi = document.createElement('div');
+                altBilgi.className = 'text-muted small mt-1';
+                altBilgi.textContent = (rozet.moduleName ? rozet.moduleName + ' — ' : '') + rozet.progressText;
+                popup.appendChild(altBilgi);
+
+                return popup;
+            }
+
+            fetch('/ProfilRozetleri/Badges/GetData')
+                .then(function (r) { return r.json(); })
+                .then(function (veri) {
+                    var toplamRozet = veri.earnedBadges.length + veri.unearnedBadges.length;
+
+                    document.getElementById('seviyeEtiketi').textContent = 'Seviye ' + veri.level;
+                    document.getElementById('xpEtiketi').textContent = veri.xp + ' XP';
+                    document.getElementById('xpIlerlemeCubugu').style.width = veri.xpPercentToNextLevel + '%';
+                    document.getElementById('xpIlerlemeMetni').textContent =
+                        'Seviye ' + (veri.level + 1) + "'e %" + veri.xpPercentToNextLevel + ' yolda';
+                    document.getElementById('xpHamDeger').textContent = veri.xp + ' / ' + veri.xpGerekenSeviyeEsigi;
+                    document.getElementById('girisSerisiDegeri').textContent = veri.consecutiveLoginDays + ' gün';
+                    document.getElementById('rozetSayisiDegeri').textContent = veri.earnedBadges.length + ' / ' + toplamRozet;
+
+                    document.getElementById('rozetTamamlanmaEtiketi').textContent =
+                        veri.earnedBadges.length + '/' + toplamRozet + ' tamamlandı';
+
+                    var kazanilmisAlan = document.getElementById('kazanilmisRozetler');
+                    var kazanilmamisAlan = document.getElementById('kazanilmamisRozetler');
+
+                    veri.earnedBadges.forEach(function (rozet) {
+                        kazanilmisAlan.appendChild(rozetKartiOlustur(rozet, true));
+                    });
+                    veri.unearnedBadges.forEach(function (rozet) {
+                        kazanilmamisAlan.appendChild(rozetKartiOlustur(rozet, false));
+                    });
+                });
+        })();
+    </script>
+}

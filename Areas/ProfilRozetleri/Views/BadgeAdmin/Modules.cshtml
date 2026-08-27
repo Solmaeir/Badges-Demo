@@ -1,0 +1,96 @@
+@*
+    Modül Yönetimi'nin doğrudan adresle açılan tam sayfa hali (örn. yer
+    imi/direkt link). Tablolar sunucuda üretilmez — sayfa açılınca JS,
+    GetModulesJson'dan JSON çeker ve satırları oradan kurar (bkz.
+    _ModulYonetimiScript.cshtml, aynı script Rozet Ekle/Düzenle formundaki
+    popup tarafından da kullanılıyor).
+*@
+@{
+    ViewData["Title"] = "Modül Yönetimi";
+}
+
+@Html.AntiForgeryToken()
+
+<div class="mb-3 text-right">
+    <a asp-action="Index" class="btn btn-default btn-sm">← Rozetlere Dön</a>
+</div>
+
+<div id="modulYonetimiMesaj"></div>
+
+<div class="card mb-3">
+    <div class="card-header">
+        <h3 class="card-title">Mevcut Modüller</h3>
+    </div>
+    <div class="card-body">
+        <table class="table table-bordered table-striped">
+            <thead>
+                <tr>
+                    <th>Modül Adı</th>
+                    <th>Controller</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="mevcutModullerTablosu"></tbody>
+        </table>
+        <p class="text-muted mb-0" id="mevcutModulBosMesaji" style="display:none;">Henüz modül eklenmemiş.</p>
+    </div>
+</div>
+
+<div class="card mb-0">
+    <div class="card-header">
+        <h3 class="card-title">Keşfedilen Controller'lar (henüz modül değil)</h3>
+    </div>
+    <div class="card-body">
+        <p class="text-muted mb-0" id="kesfedilenBosMesaji" style="display:none;">
+            Sitedeki tüm controller'lar zaten birer modüle bağlı.
+        </p>
+        <div id="kesfedilenIcerik">
+            <p class="text-muted">
+                Bunlar sitede gerçekten var olan (ASP.NET Core'un routing kaydından
+                otomatik bulunan) ama henüz rozet sistemine tanıtılmamış controller'lar.
+                Bir isim verip eklersen, rozet sistemine "modül" olarak kaydolur.
+            </p>
+            <table class="table table-sm">
+                <tbody id="kesfedilenControllerTablosu"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-0 mt-3">
+    <div class="card-header">
+        <h3 class="card-title">Elle Ekle</h3>
+    </div>
+    <div class="card-body">
+        <p class="text-muted">
+            Liste yalnızca uygulamanın kendi routing kaydından keşfedilebilen
+            controller'ları gösterir. Listede olmayan bir alan için, WebLog'daki
+            Controller değerini buraya elle yazarak da modül tanımlayabilirsin.
+        </p>
+        <form id="elleModulEkleFormu" class="form-inline">
+            <input type="text" name="controllerName" class="form-control form-control-sm mr-2"
+                   placeholder="Controller adı (WebLog'daki gibi)" required style="width:220px;" />
+            <input type="text" name="moduleName" class="form-control form-control-sm mr-2"
+                   placeholder="Görünecek ad (örn. Faturalar)" required style="width:220px;" />
+            <button type="submit" class="btn btn-success btn-sm">Modül Olarak Ekle</button>
+        </form>
+    </div>
+</div>
+
+@await Html.PartialAsync("_ModulYonetimiScript")
+
+<script>
+    (function () {
+        window.ModulYonetimiKur({
+            getJsonUrl: '@Url.Action("GetModulesJson")',
+            addModuleUrl: '@Url.Action("AddModule")',
+            deleteModuleUrl: '@Url.Action("DeleteModule")',
+            mevcutTbodyId: 'mevcutModullerTablosu',
+            mevcutBosMesajId: 'mevcutModulBosMesaji',
+            kesfedilenTbodyId: 'kesfedilenControllerTablosu',
+            kesfedilenIcerikId: 'kesfedilenIcerik',
+            kesfedilenBosMesajId: 'kesfedilenBosMesaji',
+            elleEkleFormId: 'elleModulEkleFormu'
+        });
+    })();
+</script>

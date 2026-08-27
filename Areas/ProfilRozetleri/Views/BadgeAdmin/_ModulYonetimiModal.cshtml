@@ -1,0 +1,68 @@
+@*
+    Modülleri Yönet popup'ının modal kabuğu — modüle ait, host'tan bağımsız.
+    Tablolar burada sunucuda üretilmez; JS, ModulYonetimiKur ile
+    GetModulesJson'dan besleniyor (bkz. _ModulYonetimiScript.cshtml).
+
+    ÖNEMLİ: Bu partial, Add.cshtml/Edit.cshtml'de Rozet formunun (<form
+    asp-action="Add"/"Edit">) DIŞINDA render edilmelidir. İçindeki "Elle
+    Ekle" formu kendi <form> etiketini taşıyor — bir <form>'un içine
+    yerleştirilirse HTML5 ayrıştırıcısı iç içe form'a izin vermediği için
+    bu <form> etiketini sessizce yok sayar (yalnızca içindeki input'lar
+    kalır, dış forma "sızar"). Sonucu: "Elle Ekle" butonuna basınca modül
+    eklenmez, bunun yerine dış Rozet formu submit edilir. Bu proje bir kez
+    bu hatayı yaşadı; modal kasıtlı olarak _Form.cshtml'den ayrı bir
+    partial'a taşındı ki forma bağımlı kalmasın.
+*@
+<div class="modal fade" id="rozetModulModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title">Modülleri Yönet</h4>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <h6>Mevcut Modüller</h6>
+                <table class="table table-bordered table-striped table-sm">
+                    <thead>
+                        <tr>
+                            <th>Modül Adı</th>
+                            <th>Controller</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="rozetModulMevcutTablosu"></tbody>
+                </table>
+                <p class="text-muted mb-0" id="rozetModulMevcutBosMesaji" style="display:none;">Henüz modül eklenmemiş.</p>
+
+                <hr />
+
+                <h6>Keşfedilen Controller'lar (henüz modül değil)</h6>
+                <p class="text-muted mb-0" id="rozetModulKesfedilenBosMesaji" style="display:none;">
+                    Sitedeki tüm controller'lar zaten birer modüle bağlı.
+                </p>
+                <div id="rozetModulKesfedilenIcerik">
+                    <table class="table table-sm">
+                        <tbody id="rozetModulKesfedilenTablosu"></tbody>
+                    </table>
+                </div>
+
+                <hr />
+
+                <h6>Elle Ekle</h6>
+                <p class="text-muted small">
+                    Listede yoksa, WebLog'daki Controller değerini buraya
+                    yazarak da modül tanımlayabilirsin.
+                </p>
+                <form id="rozetModulElleEkleFormu" class="form-inline">
+                    <input type="text" name="controllerName" class="form-control form-control-sm mr-2"
+                           placeholder="Controller adı (WebLog'daki gibi)" required style="width:220px;" />
+                    <input type="text" name="moduleName" class="form-control form-control-sm mr-2"
+                           placeholder="Görünecek ad (örn. Faturalar)" required style="width:220px;" />
+                    <button type="submit" class="btn btn-success btn-sm">Modül Olarak Ekle</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@await Html.PartialAsync("_ModulYonetimiScript")
